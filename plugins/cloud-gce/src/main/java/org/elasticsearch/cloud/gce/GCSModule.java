@@ -17,6 +17,21 @@
  * under the License.
  */
 
-grant {
-  permission java.security.AllPermission;
-};
+package org.elasticsearch.cloud.gce;
+
+import org.elasticsearch.common.inject.AbstractModule;
+
+public class GCSModule extends AbstractModule {
+	
+	static Class<? extends GCSService> storageServiceImpl = GCSServiceImpl.class;
+
+	public static Class<? extends GCSService> getStorageServiceImpl() {
+    	return storageServiceImpl;
+    }
+
+	@Override
+	protected void configure() {
+		bind(GCSService.class).to(storageServiceImpl).asEagerSingleton();		
+	}
+
+}

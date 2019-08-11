@@ -23,6 +23,7 @@ import com.google.api.client.http.HttpHeaders;
 import com.google.api.client.util.ClassInfo;
 
 import org.elasticsearch.SpecialPermission;
+import org.elasticsearch.cloud.gce.GCSModule;
 import org.elasticsearch.cloud.gce.GceComputeService;
 import org.elasticsearch.cloud.gce.GceModule;
 import org.elasticsearch.common.Strings;
@@ -34,7 +35,10 @@ import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.discovery.DiscoveryModule;
 import org.elasticsearch.discovery.gce.GceDiscovery;
 import org.elasticsearch.discovery.gce.GceUnicastHostsProvider;
+import org.elasticsearch.index.snapshots.blobstore.BlobStoreIndexShardRepository;
 import org.elasticsearch.plugins.Plugin;
+import org.elasticsearch.repositories.RepositoriesModule;
+import org.elasticsearch.repositories.gcs.GCSRepository;
 
 import java.security.AccessController;
 import java.security.PrivilegedAction;
@@ -82,15 +86,19 @@ public class CloudGcePlugin extends Plugin {
 
     @Override
     public String description() {
-        return "Cloud Google Compute Engine Plugin";
+        return "Cloud Google Plugin";
     }
 
     @Override
     public Collection<Module> nodeModules() {
         List<Module> modules = new ArrayList<>();
+
         if (isDiscoveryAlive(settings, logger)) {
             modules.add(new GceModule());
         }
+    
+        modules.add(new GCSModule());
+
         return modules;
     }
 
@@ -100,6 +108,9 @@ public class CloudGcePlugin extends Plugin {
         if (isDiscoveryAlive(settings, logger)) {
             services.add(GceModule.getComputeServiceImpl());
         }
+        
+        services.add(GCSModule.getStorageServiceImpl());
+        
         return services;
     }
 
@@ -110,6 +121,10 @@ public class CloudGcePlugin extends Plugin {
         }
     }
 
+    public void onModule(RepositoriesModule repositoriesModule) {        
+        repositoriesModule.registerRepository(GCSRepository.TYPE, GCSRepository.class, BlobStoreIndexShardRepository.class);        
+    }
+    
     /**
      * Check if discovery is meant to start
      *
