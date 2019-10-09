@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.elasticsearch.cloud.gce.blobstore;
+package org.elasticsearch.cloud.gcs.blobstore;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -34,8 +34,7 @@ import org.elasticsearch.common.logging.Loggers;
 
 public class GCSBlobContainer extends AbstractBlobContainer {
 
-	private static final ESLogger logger = Loggers.getLogger(GCSBlobContainer.class);
-		
+	private final ESLogger logger = Loggers.getLogger(getClass());		
 	private final GCSBlobStore blobStore;
 	private final String path;
 

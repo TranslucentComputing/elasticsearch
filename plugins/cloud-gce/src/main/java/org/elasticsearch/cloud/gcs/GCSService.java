@@ -17,7 +17,10 @@
  * under the License.
  */
 
-package org.elasticsearch.cloud.gce;
+package org.elasticsearch.cloud.gcs;
+
+import java.io.IOException;
+import java.security.GeneralSecurityException;
 
 import org.elasticsearch.common.component.LifecycleComponent;
 import org.elasticsearch.common.unit.TimeValue;
@@ -26,7 +29,8 @@ import com.google.cloud.storage.Storage;
 
 public interface GCSService extends LifecycleComponent<GCSService> {
 
-	final class REPOSITORY_GCS {
+	final class RepositoryGCS {
+		private RepositoryGCS() {}
 		public static final String BUCKET = "repositories.gcs.bucket";
 		public static final String BASE_PATH = "repositories.gcs.base_path";
 		public static final String APPLICATION_NAME = "repositories.gcs.application_name";
@@ -37,5 +41,5 @@ public interface GCSService extends LifecycleComponent<GCSService> {
         public static final String COMPRESS = "repositories.gcs.compress";        
 	}
 	
-	Storage createClient(String serviceAccount,String application,TimeValue connectTimeout, TimeValue readTimeout) throws Exception;
+	Storage createClient(String serviceAccount,String application,TimeValue connectTimeout, TimeValue readTimeout) throws IOException, GeneralSecurityException;
 }

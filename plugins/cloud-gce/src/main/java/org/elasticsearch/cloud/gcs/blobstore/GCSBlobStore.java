@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.elasticsearch.cloud.gce.blobstore;
+package org.elasticsearch.cloud.gcs.blobstore;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -53,10 +53,10 @@ import com.google.cloud.WriteChannel;
 import com.google.cloud.storage.Blob;
 import com.google.cloud.storage.BlobId;
 import com.google.cloud.storage.BlobInfo;
-import com.google.cloud.storage.Bucket;
 import com.google.cloud.storage.Storage;
 import com.google.cloud.storage.Storage.BlobListOption;
 import com.google.cloud.storage.Storage.CopyRequest;
+import com.google.cloud.storage.StorageException;
 
 public class GCSBlobStore extends AbstractComponent implements BlobStore {
 	
@@ -74,18 +74,20 @@ public class GCSBlobStore extends AbstractComponent implements BlobStore {
 		this.bucket = bucket;
 		this.storage = storage;
 
-		if (doesBucketExist(bucket) == false) {
+		if (!doesBucketExist(bucket)) {
 			throw new BlobStoreException("Bucket [" + bucket + "] does not exist");
 		}
 	}
 
 	@Override
 	public BlobContainer blobContainer(BlobPath path) {
+		logger.info("Set blob container with path: {}", path);
 		return new GCSBlobContainer(path, this);
 	}
 
 	@Override
 	public void delete(BlobPath path) throws IOException {
+		logger.debug("Delete path: {}", path.toString());
 		String keyPath = path.buildAsString("/");
 		if (!keyPath.isEmpty()) {
 			keyPath = keyPath + "/";
@@ -106,12 +108,12 @@ public class GCSBlobStore extends AbstractComponent implements BlobStore {
 	 * @return true if the bucket exists, false otherwise
 	 */
 	boolean doesBucketExist(final String bucketName) {
+		logger.debug("Checking if bucekt exists: {}", bucketName);
 		try {
 			return RepoUtil.doPrivileged(new PrivilegedExceptionAction<Boolean>() {
 				@Override
-				public Boolean run() throws Exception {
-					final Bucket bucket = storage.get(bucketName);
-					return bucket != null;
+				public Boolean run() throws Exception {					
+					return storage.get(bucketName) != null;
 				}
 			});
 		} catch (IOException e) {
@@ -138,7 +140,9 @@ public class GCSBlobStore extends AbstractComponent implements BlobStore {
 	 * @return a map of blob names and their metadata
 	 */
 	Map<String, BlobMetaData> listBlobsByPrefix(final String path, final String prefix) throws IOException {
+		logger.debug("List blobs for path: {}, prefix: {}", path, prefix);
 		final String pathPrefix = buildKey(path, prefix);
+		logger.debug("Path prefix: {}", pathPrefix);
 		final MapBuilder<String, BlobMetaData> mapBuilder = MapBuilder.newMapBuilder();
 
 		return RepoUtil.doPrivileged(new PrivilegedExceptionAction<Map<String, BlobMetaData>>() {
@@ -146,8 +150,10 @@ public class GCSBlobStore extends AbstractComponent implements BlobStore {
 			public Map<String, BlobMetaData> run() throws Exception {
 				Iterable<Blob> iterable = storage.get(bucket).list(BlobListOption.prefix(pathPrefix)).iterateAll();
 				for (Blob blob : iterable) {
+					logger.debug("Blob: {}", blob.toString());
 					assert blob.getName().startsWith(path);
 					final String suffixName = blob.getName().substring(path.length());
+					logger.debug("Suffix: {}", suffixName);
 					mapBuilder.put(suffixName, new PlainBlobMetaData(suffixName, blob.getSize()));
 				}
 
@@ -173,7 +179,7 @@ public class GCSBlobStore extends AbstractComponent implements BlobStore {
 	 */
 	boolean blobExists(String blobName) throws IOException {
 		final BlobId blobId = BlobId.of(bucket, blobName);
-		logger.debug("Blob id: {}", blobId);
+		logger.debug("Blob id: [{}]", blobId);
 
 		Blob blob = getBlob(blobId);
 
@@ -188,7 +194,7 @@ public class GCSBlobStore extends AbstractComponent implements BlobStore {
 	 */
 	InputStream readBlob(final String blobName) throws IOException {
 		final BlobId blobId = BlobId.of(bucket, blobName);
-		logger.debug("Blob id: {}", blobId);
+		logger.debug("Blob id: [{}]", blobId);
 		final Blob blob = getBlob(blobId);
 
 		if (blob == null) {
@@ -242,7 +248,7 @@ public class GCSBlobStore extends AbstractComponent implements BlobStore {
 
 		final BlobInfo blobInfo = BlobInfo.newBuilder(bucket, blobName).build();
 
-		logger.debug("Blob info: {}", blobInfo);
+		logger.debug("Blob info: {}, size: {}, size threshold: {}", blobInfo, blobSize, LARGE_BLOB_THRESHOLD_BYTE_SIZE);
 
 		if (blobSize > LARGE_BLOB_THRESHOLD_BYTE_SIZE) {
 			writeBlobResumable(blobInfo, inputStream);
@@ -260,6 +266,7 @@ public class GCSBlobStore extends AbstractComponent implements BlobStore {
 	 * @param inputStream the stream containing the blob data
 	 */
 	private void writeBlobResumable(final BlobInfo blobInfo, InputStream inputStream) throws IOException {
+		logger.info("Running resumable blob write");
 		final WriteChannel writeChannel = RepoUtil.doPrivileged(new PrivilegedExceptionAction<WriteChannel>() {
 			@Override
 			public WriteChannel run() throws Exception {
@@ -309,16 +316,26 @@ public class GCSBlobStore extends AbstractComponent implements BlobStore {
 	 */
 	private void writeBlobMultipart(final BlobInfo blobInfo, InputStream inputStream, long blobSize)
 			throws IOException {
+		logger.info("Running multipart blob write");
 		assert blobSize <= LARGE_BLOB_THRESHOLD_BYTE_SIZE : "large blob uploads should use the resumable upload method";
-		final ByteArrayOutputStream baos = new ByteArrayOutputStream((int) blobSize);
+		
+		final ByteArrayOutputStream baos = new ByteArrayOutputStream((int) blobSize);		
 		Streams.copy(inputStream, baos);
-		RepoUtil.doPrivilegedVoid(new PrivilegedExceptionAction<Void>() {
+				
+		Blob blob = RepoUtil.doPrivileged(new PrivilegedExceptionAction<Blob>() {
 			@Override
-			public Void run() throws Exception {
-				storage.create(blobInfo, baos.toByteArray());
-				return null;
+			public Blob run() throws Exception {		
+				try {
+					 return storage.create(blobInfo, baos.toByteArray());				
+				} catch(final StorageException se) {
+					logger.error("Failed to upload data to bucket: {}, Error: {}", se, blobInfo.getBlobId().getName(),se.getMessage());
+					
+					throw new IOException(se.getCause());
+				}
 			}
 		});
+		
+		logger.info("Created Blob: [{}]", blob);
 	}
 
 	/**
@@ -348,7 +365,7 @@ public class GCSBlobStore extends AbstractComponent implements BlobStore {
 			}
 		});
 
-		if (deleted == false) {
+		if (!deleted) {
 			throw new NoSuchFileException("Blob [" + blobName + "] does not exist");
 		}
 	}
@@ -393,7 +410,7 @@ public class GCSBlobStore extends AbstractComponent implements BlobStore {
 		assert blobIdsToDelete.size() == deletedStatuses.size();
 		boolean failed = false;
 		for (int i = 0; i < blobIdsToDelete.size(); i++) {
-			if (deletedStatuses.get(i) == false) {
+			if (Boolean.FALSE.equals(deletedStatuses.get(i))) {
 				logger.error("Failed to delete blob [{}] in bucket [{}]", blobIdsToDelete.get(i).getName(), bucket);
 				failed = true;
 			}
@@ -410,6 +427,7 @@ public class GCSBlobStore extends AbstractComponent implements BlobStore {
 	 * @param targetBlob new name of the blob in the target bucket
 	 */
 	void moveBlob(final String sourceBlobName, final String targetBlobName) throws IOException {
+		logger.info("Moving Blobs from: {}, to: {}", sourceBlobName, targetBlobName);
 		final BlobId sourceBlobId = BlobId.of(bucket, sourceBlobName);
 		final BlobId targetBlobId = BlobId.of(bucket, targetBlobName);
 		
@@ -419,11 +437,15 @@ public class GCSBlobStore extends AbstractComponent implements BlobStore {
 			@Override
 			public Void run() throws Exception {
 				// There's no atomic "move" in GCS so we need to copy and delete
-				storage.copy(request).getResult();
+				Blob copiedBlob = storage.copy(request).getResult();
+				logger.info("Copied Blob: [{}]", copiedBlob.toString());
 				final boolean deleted = storage.delete(sourceBlobId);
-				if (deleted == false) {
+				if (!deleted) {
 					throw new IOException(
 							"Failed to move source [" + sourceBlobName + "] to target [" + targetBlobName + "]");
+				}
+				else {
+					logger.info("Deleted source blob: {}", sourceBlobId);
 				}
 				
 				return null;

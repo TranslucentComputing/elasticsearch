@@ -23,9 +23,9 @@ import com.google.api.client.http.HttpHeaders;
 import com.google.api.client.util.ClassInfo;
 
 import org.elasticsearch.SpecialPermission;
-import org.elasticsearch.cloud.gce.GCSModule;
 import org.elasticsearch.cloud.gce.GceComputeService;
 import org.elasticsearch.cloud.gce.GceModule;
+import org.elasticsearch.cloud.gcs.GCSModule;
 import org.elasticsearch.common.Strings;
 import org.elasticsearch.common.component.LifecycleComponent;
 import org.elasticsearch.common.inject.Module;
@@ -132,13 +132,13 @@ public class CloudGcePlugin extends Plugin {
      */
     public static boolean isDiscoveryAlive(Settings settings, ESLogger logger) {
         // User set discovery.type: gce
-        if (GceDiscovery.GCE.equalsIgnoreCase(settings.get("discovery.type")) == false) {
+        if (!GceDiscovery.GCE.equalsIgnoreCase(settings.get("discovery.type"))) {
             logger.debug("discovery.type not set to {}", GceDiscovery.GCE);
             return false;
         }
 
-        if (checkProperty(GceComputeService.Fields.PROJECT, settings.get(GceComputeService.Fields.PROJECT), logger) == false ||
-                checkProperty(GceComputeService.Fields.ZONE, settings.getAsArray(GceComputeService.Fields.ZONE), logger) == false) {
+        if (!checkProperty(GceComputeService.Fields.PROJECT, settings.get(GceComputeService.Fields.PROJECT), logger) ||
+                !checkProperty(GceComputeService.Fields.ZONE, settings.getAsArray(GceComputeService.Fields.ZONE), logger)) {
             logger.debug("one or more gce discovery settings are missing. " +
                             "Check elasticsearch.yml file. Should have [{}] and [{}].",
                     GceComputeService.Fields.PROJECT,

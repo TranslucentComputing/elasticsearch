@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.elasticsearch.cloud.gce;
+package org.elasticsearch.cloud.gcs;
 
 import org.elasticsearch.common.inject.AbstractModule;
 

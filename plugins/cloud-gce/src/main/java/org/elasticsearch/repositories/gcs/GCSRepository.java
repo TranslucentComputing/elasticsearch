@@ -19,15 +19,13 @@
 
 package org.elasticsearch.repositories.gcs;
 
-import org.elasticsearch.cloud.gce.GCSService;
-import org.elasticsearch.cloud.gce.GCSService.REPOSITORY_GCS;
-import org.elasticsearch.cloud.gce.blobstore.GCSBlobStore;
+import org.elasticsearch.cloud.gcs.GCSService;
+import org.elasticsearch.cloud.gcs.GCSService.RepositoryGCS;
+import org.elasticsearch.cloud.gcs.blobstore.GCSBlobStore;
 import org.elasticsearch.common.Strings;
 import org.elasticsearch.common.blobstore.BlobPath;
 import org.elasticsearch.common.blobstore.BlobStore;
 import org.elasticsearch.common.inject.Inject;
-import org.elasticsearch.common.logging.ESLogger;
-import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.unit.ByteSizeUnit;
 import org.elasticsearch.common.unit.ByteSizeValue;
 import org.elasticsearch.common.unit.TimeValue;
@@ -40,9 +38,10 @@ import com.google.cloud.storage.Storage;
 
 import static org.elasticsearch.common.unit.TimeValue.timeValueMillis;
 
-public class GCSRepository extends BlobStoreRepository {
+import java.io.IOException;
+import java.security.GeneralSecurityException;
 
-	private static final ESLogger logger = Loggers.getLogger(GCSRepository.class);
+public class GCSRepository extends BlobStoreRepository {
 	
 	public static final String TYPE = "gcs";
     public static final ByteSizeValue MAX_CHUNK_SIZE = new ByteSizeValue(100, ByteSizeUnit.MB);
@@ -58,19 +57,19 @@ public class GCSRepository extends BlobStoreRepository {
 
 	@Inject
 	public GCSRepository(RepositoryName name, RepositorySettings repositorySettings,
-			IndexShardRepository indexShardRepository, GCSService gcsService) throws Exception {
+			IndexShardRepository indexShardRepository, GCSService gcsService) throws IOException, GeneralSecurityException {
 		super(name.getName(), repositorySettings, indexShardRepository);
 
-		String bucket = repositorySettings.settings().get("bucket", settings.get(REPOSITORY_GCS.BUCKET));
+		String bucket = repositorySettings.settings().get("bucket", settings.get(RepositoryGCS.BUCKET));
 		String application = repositorySettings.settings().get("application_name",
-				settings.get(REPOSITORY_GCS.APPLICATION_NAME, "repository-gcs"));
+				settings.get(RepositoryGCS.APPLICATION_NAME, "repository-gcs"));
 		String serviceAccount = repositorySettings.settings().get("service_account",
-				settings.get(REPOSITORY_GCS.SERVICE_ACCOUNT));
+				settings.get(RepositoryGCS.SERVICE_ACCOUNT));
 
-		String basePath = repositorySettings.settings().get("base_path", settings.get(REPOSITORY_GCS.BASE_PATH));
-		if (Strings.hasLength(basePath)) {
+		String configPath = repositorySettings.settings().get("base_path", settings.get(RepositoryGCS.BASE_PATH));
+		if (Strings.hasLength(configPath)) {
 			BlobPath path = new BlobPath();
-			for (String elem : Strings.splitStringToArray(basePath, '/')) {
+			for (String elem : Strings.splitStringToArray(configPath, '/')) {
 				path = path.add(elem);
 			}
 			this.basePath = path;
@@ -79,22 +78,22 @@ public class GCSRepository extends BlobStoreRepository {
 		}
 		
 		this.chunkSize = repositorySettings.settings().getAsBytesSize("chunk_size",
-				settings.getAsBytesSize(REPOSITORY_GCS.CHUNK_SIZE, MAX_CHUNK_SIZE));
+				settings.getAsBytesSize(RepositoryGCS.CHUNK_SIZE, MAX_CHUNK_SIZE));
 		this.compress = repositorySettings.settings().getAsBoolean("compress",
-				settings.getAsBoolean(REPOSITORY_GCS.COMPRESS, false));
+				settings.getAsBoolean(RepositoryGCS.COMPRESS, false));
 
 	
 		TimeValue connectTimeout = null;
 		TimeValue readTimeout = null;
 
 		TimeValue timeout = repositorySettings.settings().getAsTime("read_timeout",
-				settings.getAsTime(REPOSITORY_GCS.HTTP_READ_TIMEOUT, NO_TIMEOUT));
+				settings.getAsTime(RepositoryGCS.HTTP_READ_TIMEOUT, NO_TIMEOUT));
 		if ((timeout != null) && (timeout.millis() != NO_TIMEOUT.millis())) {
 			connectTimeout = timeout;
 		}
 
 		timeout = repositorySettings.settings().getAsTime("connect_timeout",
-				settings.getAsTime(REPOSITORY_GCS.HTTP_CONNECT_TIMEOUT, NO_TIMEOUT));
+				settings.getAsTime(RepositoryGCS.HTTP_CONNECT_TIMEOUT, NO_TIMEOUT));
 		if ((timeout != null) && (timeout.millis() != NO_TIMEOUT.millis())) {
 			readTimeout = timeout;
 		}
@@ -103,6 +102,9 @@ public class GCSRepository extends BlobStoreRepository {
 				bucket,this.basePath,application,serviceAccount,readTimeout, connectTimeout, this.compress, this.chunkSize);
 
 		Storage client = gcsService.createClient(serviceAccount, application, connectTimeout, readTimeout);
+		
+		logger.info("Created storage client");
+		
 		this.blobStore = new GCSBlobStore(settings, bucket, client);
 	}
 

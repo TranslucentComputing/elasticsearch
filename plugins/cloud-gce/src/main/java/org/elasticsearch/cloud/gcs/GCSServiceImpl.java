@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.elasticsearch.cloud.gce;
+package org.elasticsearch.cloud.gcs;
 
 import com.google.api.client.googleapis.GoogleUtils;
 import com.google.auth.http.HttpTransportFactory;
@@ -31,8 +31,6 @@ import com.google.api.services.storage.StorageScopes;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.common.component.AbstractLifecycleComponent;
 import org.elasticsearch.common.inject.Inject;
-import org.elasticsearch.common.logging.ESLogger;
-import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.env.Environment;
 import org.elasticsearch.repositories.gcs.RepoUtil;
@@ -48,8 +46,6 @@ import java.security.PrivilegedExceptionAction;
 
 public class GCSServiceImpl extends AbstractLifecycleComponent<GCSService> implements GCSService {
 
-	private static final ESLogger logger = Loggers.getLogger(GCSServiceImpl.class);
-
 	private Environment env;
 
 	@Inject
@@ -60,35 +56,51 @@ public class GCSServiceImpl extends AbstractLifecycleComponent<GCSService> imple
 
 	@Override
 	public Storage createClient(final String serviceAccount, final String application, final TimeValue connectTimeout,
-			final TimeValue readTimeout) throws Exception {
-
+			final TimeValue readTimeout) throws IOException, GeneralSecurityException {
+		
+		final NetHttpTransport.Builder builder = new NetHttpTransport.Builder();
+		builder.trustCertificates(GoogleUtils.getCertificateTrustStore());
+		final HttpTransport httpTransport = builder.build();
+		
 		final HttpTransportOptions httpTransportOptions = HttpTransportOptions.newBuilder()
 				.setConnectTimeout(RepoUtil.toTimeout(connectTimeout))
 				.setReadTimeout(RepoUtil.toTimeout(readTimeout))				
 				.setHttpTransportFactory(new HttpTransportFactory() {
-
 					@Override
 					public HttpTransport create() {
-						final NetHttpTransport.Builder builder = new NetHttpTransport.Builder();
-						try {
-							// requires java.lang.RuntimePermission "setFactory"
-							builder.trustCertificates(GoogleUtils.getCertificateTrustStore());
-						} catch (GeneralSecurityException | IOException e) {
-							logger.error("Failed to set trusted cert for google http transport", e);							
-						}
-						return builder.build();
+						return httpTransport;
 					}
-				}).build();
-
+				})
+				.build();
+		
 		final ServiceAccountCredentials serviceAccountCredentials = loadCredentials(serviceAccount);
 
+		
+		final String projectId = getProjectId(serviceAccountCredentials);
+		
+		logger.debug("Project ID: [{}]", projectId);
 		logger.debug("initializing client with service account [{}]", serviceAccountCredentials.toString());
 				
 		return StorageOptions.newBuilder()			
 				.setCredentials(serviceAccountCredentials)
-				.setTransportOptions(httpTransportOptions)		
+				.setTransportOptions(httpTransportOptions)	
+				.setProjectId(projectId)
 				.build()
 				.getService();
+	}
+
+	/**
+	 * Retrieve the cloud project Id from the service account
+	 * @param serviceAccountCredentials
+	 * @return Project Id
+	 */
+	private String getProjectId(ServiceAccountCredentials serviceAccountCredentials) {
+		
+		//Assuming that the client email is from the same cloud project
+		
+		String[] emailParts = serviceAccountCredentials.getClientEmail().split("@");		
+		String[] domainPart = emailParts[1].split("\\.");			
+		return domainPart[0];		
 	}
 
 	/**
@@ -101,9 +113,12 @@ public class GCSServiceImpl extends AbstractLifecycleComponent<GCSService> imple
 		}
 
 		Path account = env.configFile().resolve(serviceAccount);
-		if (Files.exists(account) == false) {
+		if (!Files.exists(account)) {
 			throw new ElasticsearchException(
 					"Unable to find service account file [" + serviceAccount + "] defined for repository");
+		}
+		else {
+			logger.info("Found service account: [{}]", account.toAbsolutePath());
 		}
 
 		try (InputStream is = Files.newInputStream(account)) {
@@ -122,17 +137,17 @@ public class GCSServiceImpl extends AbstractLifecycleComponent<GCSService> imple
 	}
 
 	@Override
-	protected void doStart() throws ElasticsearchException {
+	protected void doStart() {
 		logger.debug("Started Component GCSServiceImpl");
 	}
 
 	@Override
-	protected void doStop() throws ElasticsearchException {
+	protected void doStop() {
 		logger.debug("Stopped Component GCSServiceImpl");
 	}
 
 	@Override
-	protected void doClose() throws ElasticsearchException {
+	protected void doClose() {
 		logger.debug("Closed Component GCSServiceImpl");
 	}	
 }
