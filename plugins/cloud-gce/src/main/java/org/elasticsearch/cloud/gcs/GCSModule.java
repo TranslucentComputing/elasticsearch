@@ -22,16 +22,16 @@ package org.elasticsearch.cloud.gcs;
 import org.elasticsearch.common.inject.AbstractModule;
 
 public class GCSModule extends AbstractModule {
-	
-	static Class<? extends GCSService> storageServiceImpl = GCSServiceImpl.class;
 
-	public static Class<? extends GCSService> getStorageServiceImpl() {
-    	return storageServiceImpl;
+    static Class<? extends GCSService> storageServiceImpl = GCSServiceImpl.class;
+
+    public static Class<? extends GCSService> getStorageServiceImpl() {
+        return storageServiceImpl;
     }
 
-	@Override
-	protected void configure() {
-		bind(GCSService.class).to(storageServiceImpl).asEagerSingleton();		
-	}
+    @Override
+    protected void configure() {
+        bind(GCSService.class).to(storageServiceImpl).asEagerSingleton();
+    }
 
 }

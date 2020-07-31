@@ -29,17 +29,19 @@ import com.google.cloud.storage.Storage;
 
 public interface GCSService extends LifecycleComponent<GCSService> {
 
-	final class RepositoryGCS {
-		private RepositoryGCS() {}
-		public static final String BUCKET = "repositories.gcs.bucket";
-		public static final String BASE_PATH = "repositories.gcs.base_path";
-		public static final String APPLICATION_NAME = "repositories.gcs.application_name";
-		public static final String SERVICE_ACCOUNT = "repositories.gcs.service_account";
-		public static final String HTTP_READ_TIMEOUT = "repositories.gcs.http.read_timeout";
-		public static final String HTTP_CONNECT_TIMEOUT = "repositories.gcs.http.connect_timeout";
+    final class RepositoryGCS {
+        private RepositoryGCS() {
+        }
+
+        public static final String BUCKET = "repositories.gcs.bucket";
+        public static final String BASE_PATH = "repositories.gcs.base_path";
+        public static final String APPLICATION_NAME = "repositories.gcs.application_name";
+        public static final String SERVICE_ACCOUNT = "repositories.gcs.service_account";
+        public static final String HTTP_READ_TIMEOUT = "repositories.gcs.http.read_timeout";
+        public static final String HTTP_CONNECT_TIMEOUT = "repositories.gcs.http.connect_timeout";
         public static final String CHUNK_SIZE = "repositories.gcs.chunk_size";
-        public static final String COMPRESS = "repositories.gcs.compress";        
-	}
-	
-	Storage createClient(String serviceAccount,String application,TimeValue connectTimeout, TimeValue readTimeout) throws IOException, GeneralSecurityException;
+        public static final String COMPRESS = "repositories.gcs.compress";
+    }
+
+    Storage createClient(String serviceAccount, String application, TimeValue connectTimeout, TimeValue readTimeout) throws IOException, GeneralSecurityException;
 }

@@ -42,6 +42,7 @@ public interface GceComputeService extends LifecycleComponent<GceComputeService>
 
     /**
      * Return a collection of running instances within the same GCE project
+     *
      * @return a collection of running instances within the same GCE project
      */
     Collection<Instance> instances();
@@ -54,10 +55,11 @@ public interface GceComputeService extends LifecycleComponent<GceComputeService>
      *     <li>`hostname` when we need to resolve the host name</li>
      *     <li>`network-interfaces/0/ip` when we need to resolve private IP</li>
      * </ul>
-     * @see org.elasticsearch.cloud.gce.network.GceNameResolver for bindings
+     *
      * @param metadataPath path to metadata information
      * @return extracted information (for example a hostname or an IP address)
      * @throws IOException in case metadata URL is not accessible
+     * @see org.elasticsearch.cloud.gce.network.GceNameResolver for bindings
      */
     String metadata(String metadataPath) throws IOException;
 }

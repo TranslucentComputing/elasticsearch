@@ -101,7 +101,7 @@ public class GceNameResolver extends AbstractComponent implements CustomNameReso
             gceMetadataPath = Strings.replace(GceAddressResolverType.PRIVATE_IP.gceName, "{{network}}", network);
         } else {
             throw new IllegalArgumentException("[" + value + "] is not one of the supported GCE network.host setting. " +
-                    "Expecting _gce_, _gce:privateIp:X_, _gce:hostname_");
+                "Expecting _gce_, _gce:privateIp:X_, _gce:hostname_");
         }
 
         try {
@@ -110,7 +110,7 @@ public class GceNameResolver extends AbstractComponent implements CustomNameReso
                 throw new IOException("no gce metadata returned from [" + gceMetadataPath + "] for [" + value + "]");
             }
             // only one address: because we explicitly ask for only one via the GceHostnameType
-            return new InetAddress[] { InetAddress.getByName(metadataResult) };
+            return new InetAddress[]{InetAddress.getByName(metadataResult)};
         } catch (IOException e) {
             throw new IOException("IOException caught when fetching InetAddress from [" + gceMetadataPath + "]", e);
         }

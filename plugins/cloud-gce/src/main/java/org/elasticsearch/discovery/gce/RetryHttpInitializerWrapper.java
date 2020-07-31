@@ -34,7 +34,7 @@ public class RetryHttpInitializerWrapper implements HttpRequestInitializer {
     private int maxWait;
 
     private static final ESLogger logger =
-            ESLoggerFactory.getLogger(RetryHttpInitializerWrapper.class.getName());
+        ESLoggerFactory.getLogger(RetryHttpInitializerWrapper.class.getName());
 
     // Intercepts the request for filling in the "Authorization"
     // header field, as well as recovering from certain unsuccessful
@@ -55,7 +55,7 @@ public class RetryHttpInitializerWrapper implements HttpRequestInitializer {
 
     // Use only for testing.
     RetryHttpInitializerWrapper(
-            Credential wrappedCredential, Sleeper sleeper, int maxWait) {
+        Credential wrappedCredential, Sleeper sleeper, int maxWait) {
         this.wrappedCredential = Objects.requireNonNull(wrappedCredential);
         this.sleeper = sleeper;
         this.maxWait = maxWait;
@@ -64,43 +64,43 @@ public class RetryHttpInitializerWrapper implements HttpRequestInitializer {
     @Override
     public void initialize(HttpRequest httpRequest) {
         final HttpUnsuccessfulResponseHandler backoffHandler =
-                new HttpBackOffUnsuccessfulResponseHandler(
-                        new ExponentialBackOff.Builder()
-                                .setMaxElapsedTimeMillis(maxWait)
-                                .build())
-                        .setSleeper(sleeper);
+            new HttpBackOffUnsuccessfulResponseHandler(
+                new ExponentialBackOff.Builder()
+                    .setMaxElapsedTimeMillis(maxWait)
+                    .build())
+                .setSleeper(sleeper);
 
         httpRequest.setInterceptor(wrappedCredential);
         httpRequest.setUnsuccessfulResponseHandler(
-                new HttpUnsuccessfulResponseHandler() {
-                    int retry = 0;
+            new HttpUnsuccessfulResponseHandler() {
+                int retry = 0;
 
-                    @Override
-                    public boolean handleResponse(HttpRequest request, HttpResponse response, boolean supportsRetry) throws IOException {
-                        if (wrappedCredential.handleResponse(
-                                request, response, supportsRetry)) {
-                            // If credential decides it can handle it,
-                            // the return code or message indicated
-                            // something specific to authentication,
-                            // and no backoff is desired.
-                            return true;
-                        } else if (backoffHandler.handleResponse(
-                                request, response, supportsRetry)) {
-                            // Otherwise, we defer to the judgement of
-                            // our internal backoff handler.
-                            logger.debug("Retrying [{}] times : [{}]", retry, request.getUrl());
-                            return true;
-                        } else {
-                            return false;
-                        }
+                @Override
+                public boolean handleResponse(HttpRequest request, HttpResponse response, boolean supportsRetry) throws IOException {
+                    if (wrappedCredential.handleResponse(
+                        request, response, supportsRetry)) {
+                        // If credential decides it can handle it,
+                        // the return code or message indicated
+                        // something specific to authentication,
+                        // and no backoff is desired.
+                        return true;
+                    } else if (backoffHandler.handleResponse(
+                        request, response, supportsRetry)) {
+                        // Otherwise, we defer to the judgement of
+                        // our internal backoff handler.
+                        logger.debug("Retrying [{}] times : [{}]", retry, request.getUrl());
+                        return true;
+                    } else {
+                        return false;
                     }
-                });
+                }
+            });
         httpRequest.setIOExceptionHandler(
-                new HttpBackOffIOExceptionHandler(
-                        new ExponentialBackOff.Builder()
-                                .setMaxElapsedTimeMillis(maxWait)
-                                .build())
-                        .setSleeper(sleeper)
+            new HttpBackOffIOExceptionHandler(
+                new ExponentialBackOff.Builder()
+                    .setMaxElapsedTimeMillis(maxWait)
+                    .build())
+                .setSleeper(sleeper)
         );
     }
 }
