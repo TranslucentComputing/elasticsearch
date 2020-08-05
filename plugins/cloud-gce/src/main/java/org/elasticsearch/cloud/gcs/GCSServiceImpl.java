@@ -46,108 +46,108 @@ import java.security.PrivilegedExceptionAction;
 
 public class GCSServiceImpl extends AbstractLifecycleComponent<GCSService> implements GCSService {
 
-	private Environment env;
+    private Environment env;
 
-	@Inject
-	public GCSServiceImpl(Environment env) {
-		super(env.settings());
-		this.env = env;
-	}
+    @Inject
+    public GCSServiceImpl(Environment env) {
+        super(env.settings());
+        this.env = env;
+    }
 
-	@Override
-	public Storage createClient(final String serviceAccount, final String application, final TimeValue connectTimeout,
-			final TimeValue readTimeout) throws IOException, GeneralSecurityException {
-		
-		final NetHttpTransport.Builder builder = new NetHttpTransport.Builder();
-		builder.trustCertificates(GoogleUtils.getCertificateTrustStore());
-		final HttpTransport httpTransport = builder.build();
-		
-		final HttpTransportOptions httpTransportOptions = HttpTransportOptions.newBuilder()
-				.setConnectTimeout(RepoUtil.toTimeout(connectTimeout))
-				.setReadTimeout(RepoUtil.toTimeout(readTimeout))				
-				.setHttpTransportFactory(new HttpTransportFactory() {
-					@Override
-					public HttpTransport create() {
-						return httpTransport;
-					}
-				})
-				.build();
-		
-		final ServiceAccountCredentials serviceAccountCredentials = loadCredentials(serviceAccount);
+    @Override
+    public Storage createClient(final String serviceAccount, final String application, final TimeValue connectTimeout,
+                                final TimeValue readTimeout) throws IOException, GeneralSecurityException {
 
-		
-		final String projectId = getProjectId(serviceAccountCredentials);
-		
-		logger.debug("Project ID: [{}]", projectId);
-		logger.debug("initializing client with service account [{}]", serviceAccountCredentials.toString());
-				
-		return StorageOptions.newBuilder()			
-				.setCredentials(serviceAccountCredentials)
-				.setTransportOptions(httpTransportOptions)	
-				.setProjectId(projectId)
-				.build()
-				.getService();
-	}
+        final NetHttpTransport.Builder builder = new NetHttpTransport.Builder();
+        builder.trustCertificates(GoogleUtils.getCertificateTrustStore());
+        final HttpTransport httpTransport = builder.build();
 
-	/**
-	 * Retrieve the cloud project Id from the service account
-	 * @param serviceAccountCredentials
-	 * @return Project Id
-	 */
-	private String getProjectId(ServiceAccountCredentials serviceAccountCredentials) {
-		
-		//Assuming that the client email is from the same cloud project
-		
-		String[] emailParts = serviceAccountCredentials.getClientEmail().split("@");		
-		String[] domainPart = emailParts[1].split("\\.");			
-		return domainPart[0];		
-	}
+        final HttpTransportOptions httpTransportOptions = HttpTransportOptions.newBuilder()
+            .setConnectTimeout(RepoUtil.toTimeout(connectTimeout))
+            .setReadTimeout(RepoUtil.toTimeout(readTimeout))
+            .setHttpTransportFactory(new HttpTransportFactory() {
+                @Override
+                public HttpTransport create() {
+                    return httpTransport;
+                }
+            })
+            .build();
 
-	/**
-	 * HTTP request initializer that loads credentials from the service account file
-	 * and manages authentication for HTTP requests
-	 */
-	private ServiceAccountCredentials loadCredentials(String serviceAccount) throws IOException {
-		if (serviceAccount == null) {
-			throw new ElasticsearchException("Cannot load Google Cloud Storage service account file from a null path");
-		}
+        final ServiceAccountCredentials serviceAccountCredentials = loadCredentials(serviceAccount);
 
-		Path account = env.configFile().resolve(serviceAccount);
-		if (!Files.exists(account)) {
-			throw new ElasticsearchException(
-					"Unable to find service account file [" + serviceAccount + "] defined for repository");
-		}
-		else {
-			logger.info("Found service account: [{}]", account.toAbsolutePath());
-		}
 
-		try (InputStream is = Files.newInputStream(account)) {
-			return RepoUtil.doPrivileged(new PrivilegedExceptionAction<ServiceAccountCredentials>() {
-				@Override
-				public ServiceAccountCredentials run() throws Exception {
-					final Collection<String> scopes = Collections.singleton(StorageScopes.DEVSTORAGE_FULL_CONTROL);
-					final ServiceAccountCredentials credentials = ServiceAccountCredentials.fromStream(is);
-					if (credentials.createScopedRequired()) {
-						return (ServiceAccountCredentials) credentials.createScoped(scopes);
-					}
-					return credentials;
-				}
-			});
-		}
-	}
+        final String projectId = getProjectId(serviceAccountCredentials);
 
-	@Override
-	protected void doStart() {
-		logger.debug("Started Component GCSServiceImpl");
-	}
+        logger.debug("Project ID: [{}]", projectId);
+        logger.debug("initializing client with service account [{}]", serviceAccountCredentials.toString());
 
-	@Override
-	protected void doStop() {
-		logger.debug("Stopped Component GCSServiceImpl");
-	}
+        return StorageOptions.newBuilder()
+            .setCredentials(serviceAccountCredentials)
+            .setTransportOptions(httpTransportOptions)
+            .setProjectId(projectId)
+            .build()
+            .getService();
+    }
 
-	@Override
-	protected void doClose() {
-		logger.debug("Closed Component GCSServiceImpl");
-	}	
+    /**
+     * Retrieve the cloud project Id from the service account
+     *
+     * @param serviceAccountCredentials
+     * @return Project Id
+     */
+    private String getProjectId(ServiceAccountCredentials serviceAccountCredentials) {
+
+        //Assuming that the client email is from the same cloud project
+
+        String[] emailParts = serviceAccountCredentials.getClientEmail().split("@");
+        String[] domainPart = emailParts[1].split("\\.");
+        return domainPart[0];
+    }
+
+    /**
+     * HTTP request initializer that loads credentials from the service account file
+     * and manages authentication for HTTP requests
+     */
+    private ServiceAccountCredentials loadCredentials(String serviceAccount) throws IOException {
+        if (serviceAccount == null) {
+            throw new ElasticsearchException("Cannot load Google Cloud Storage service account file from a null path");
+        }
+
+        Path account = env.configFile().resolve(serviceAccount);
+        if (!Files.exists(account)) {
+            throw new ElasticsearchException(
+                "Unable to find service account file [" + serviceAccount + "] defined for repository");
+        } else {
+            logger.info("Found service account: [{}]", account.toAbsolutePath());
+        }
+
+        try (InputStream is = Files.newInputStream(account)) {
+            return RepoUtil.doPrivileged(new PrivilegedExceptionAction<ServiceAccountCredentials>() {
+                @Override
+                public ServiceAccountCredentials run() throws Exception {
+                    final Collection<String> scopes = Collections.singleton(StorageScopes.DEVSTORAGE_FULL_CONTROL);
+                    final ServiceAccountCredentials credentials = ServiceAccountCredentials.fromStream(is);
+                    if (credentials.createScopedRequired()) {
+                        return (ServiceAccountCredentials) credentials.createScoped(scopes);
+                    }
+                    return credentials;
+                }
+            });
+        }
+    }
+
+    @Override
+    protected void doStart() {
+        logger.debug("Started Component GCSServiceImpl");
+    }
+
+    @Override
+    protected void doStop() {
+        logger.debug("Stopped Component GCSServiceImpl");
+    }
+
+    @Override
+    protected void doClose() {
+        logger.debug("Closed Component GCSServiceImpl");
+    }
 }

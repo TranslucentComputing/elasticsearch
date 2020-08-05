@@ -55,6 +55,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.elasticsearch.common.util.CollectionUtils.eagerTransform;
+
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.*;
@@ -83,47 +84,47 @@ public class GceComputeServiceImpl extends AbstractLifecycleComponent<GceCompute
 
     @Override
     public Collection<Instance> instances() {
-            logger.debug("get instances for project [{}], zones [{}]", project, zones);
+        logger.debug("get instances for project [{}], zones [{}]", project, zones);
 
-            List<List<Instance>> instanceListByZone = eagerTransform(zones, new Function<String, List<Instance>>() {
-                @Override
-                public List<Instance> apply(final String zoneId) {
-                    try {
-                        // hack around code messiness in GCE code
-                        // TODO: get this fixed
-                        SecurityManager sm = System.getSecurityManager();
-                        if (sm != null) {
-                            sm.checkPermission(new SpecialPermission());
+        List<List<Instance>> instanceListByZone = eagerTransform(zones, new Function<String, List<Instance>>() {
+            @Override
+            public List<Instance> apply(final String zoneId) {
+                try {
+                    // hack around code messiness in GCE code
+                    // TODO: get this fixed
+                    SecurityManager sm = System.getSecurityManager();
+                    if (sm != null) {
+                        sm.checkPermission(new SpecialPermission());
+                    }
+                    InstanceList instanceList = AccessController.doPrivileged(new PrivilegedExceptionAction<InstanceList>() {
+                        @Override
+                        public InstanceList run() throws Exception {
+                            Compute.Instances.List list = client().instances().list(project, zoneId);
+                            return list.execute();
                         }
-                        InstanceList instanceList = AccessController.doPrivileged(new PrivilegedExceptionAction<InstanceList>() {
-                            @Override
-                            public InstanceList run() throws Exception {
-                                Compute.Instances.List list = client().instances().list(project, zoneId);
-                                return list.execute();
-                            }
-                        });
-                        if (instanceList.isEmpty() || instanceList.getItems() == null) {
-                            return Collections.EMPTY_LIST;
-                        }
-
-                        return instanceList.getItems();
-                    } catch (PrivilegedActionException e) {
-                        logger.warn("Problem fetching instance list for zone {}", zoneId);
-                        logger.debug("Full exception:", e);
-
+                    });
+                    if (instanceList.isEmpty() || instanceList.getItems() == null) {
                         return Collections.EMPTY_LIST;
                     }
+
+                    return instanceList.getItems();
+                } catch (PrivilegedActionException e) {
+                    logger.warn("Problem fetching instance list for zone {}", zoneId);
+                    logger.debug("Full exception:", e);
+
+                    return Collections.EMPTY_LIST;
                 }
-            });
-
-            // Collapse instances from all zones into one neat list
-            List<Instance> instanceList = CollectionUtils.iterableAsArrayList(Iterables.concat(instanceListByZone));
-
-            if (instanceList.size() == 0) {
-                logger.warn("disabling GCE discovery. Can not get list of nodes");
             }
+        });
 
-            return instanceList;
+        // Collapse instances from all zones into one neat list
+        List<Instance> instanceList = CollectionUtils.iterableAsArrayList(Iterables.concat(instanceListByZone));
+
+        if (instanceList.size() == 0) {
+            logger.warn("disabling GCE discovery. Can not get list of nodes");
+        }
+
+        return instanceList;
     }
 
     @Override
@@ -146,9 +147,9 @@ public class GceComputeServiceImpl extends AbstractLifecycleComponent<GceCompute
             headers.put("Metadata-Flavor", "Google");
             HttpResponse response;
             response = getGceHttpTransport().createRequestFactory()
-                    .buildGetRequest(new GenericUrl(url))
-                    .setHeaders(headers)
-                    .execute();
+                .buildGetRequest(new GenericUrl(url))
+                .setHeaders(headers)
+                .execute();
             String metadata = response.parseAsString();
             logger.debug("metadata found [{}]", metadata);
             return metadata;
@@ -161,10 +162,14 @@ public class GceComputeServiceImpl extends AbstractLifecycleComponent<GceCompute
     private TimeValue refreshInterval = null;
     private long lastRefresh;
 
-    /** Global instance of the HTTP transport. */
+    /**
+     * Global instance of the HTTP transport.
+     */
     private HttpTransport gceHttpTransport;
 
-    /** Global instance of the JSON factory. */
+    /**
+     * Global instance of the JSON factory.
+     */
     private JsonFactory gceJsonFactory;
 
     @Inject
@@ -176,7 +181,7 @@ public class GceComputeServiceImpl extends AbstractLifecycleComponent<GceCompute
         networkService.addCustomNameResolver(new GceNameResolver(settings, this));
 
         this.gceHost = settings.get("cloud.gce.host", DEFAULT_GCE_HOST);
-        this.metaDataUrl =  gceHost + "/computeMetadata/v1/instance";
+        this.metaDataUrl = gceHost + "/computeMetadata/v1/instance";
         this.gceRootUrl = settings.get("cloud.gce.root_url", DEFAULT_GCE_ROOT_URL);
         this.tokenServerEncodedUrl = metaDataUrl + "/service-accounts/default/token";
         this.validateCerts = settings.getAsBoolean("cloud.gce.validate_certificates", true);
@@ -197,7 +202,7 @@ public class GceComputeServiceImpl extends AbstractLifecycleComponent<GceCompute
     public synchronized Compute client() {
         if (refreshInterval != null && refreshInterval.millis() != 0) {
             if (client != null &&
-                    (refreshInterval.millis() < 0 || (System.currentTimeMillis() - lastRefresh) < refreshInterval.millis())) {
+                (refreshInterval.millis() < 0 || (System.currentTimeMillis() - lastRefresh) < refreshInterval.millis())) {
                 if (logger.isTraceEnabled()) logger.trace("using cache to retrieve client");
                 return client;
             }
@@ -209,8 +214,8 @@ public class GceComputeServiceImpl extends AbstractLifecycleComponent<GceCompute
 
             logger.info("starting GCE discovery service");
             final ComputeCredential credential = new ComputeCredential.Builder(getGceHttpTransport(), gceJsonFactory)
-                        .setTokenServerEncodedUrl(this.tokenServerEncodedUrl)
-                    .build();
+                .setTokenServerEncodedUrl(this.tokenServerEncodedUrl)
+                .build();
 
             // hack around code messiness in GCE code
             // TODO: get this fixed
@@ -228,12 +233,13 @@ public class GceComputeServiceImpl extends AbstractLifecycleComponent<GceCompute
 
             logger.debug("token [{}] will expire in [{}] s", credential.getAccessToken(), credential.getExpiresInSeconds());
             if (credential.getExpiresInSeconds() != null) {
-                refreshInterval = TimeValue.timeValueSeconds(credential.getExpiresInSeconds()-1);
+                refreshInterval = TimeValue.timeValueSeconds(credential.getExpiresInSeconds() - 1);
             }
 
             final boolean ifRetry = settings.getAsBoolean(Fields.RETRY, true);
             final Compute.Builder builder = new Compute.Builder(getGceHttpTransport(), gceJsonFactory, null)
-                    .setApplicationName(Fields.VERSION).setRootUrl(gceRootUrl);;
+                .setApplicationName(Fields.VERSION).setRootUrl(gceRootUrl);
+            ;
 
             if (ifRetry) {
                 int maxWait = settings.getAsInt(Fields.MAXWAIT, -1);

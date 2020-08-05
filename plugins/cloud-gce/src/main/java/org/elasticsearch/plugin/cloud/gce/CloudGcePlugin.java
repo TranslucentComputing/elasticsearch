@@ -96,7 +96,7 @@ public class CloudGcePlugin extends Plugin {
         if (isDiscoveryAlive(settings, logger)) {
             modules.add(new GceModule());
         }
-    
+
         modules.add(new GCSModule());
 
         return modules;
@@ -108,9 +108,9 @@ public class CloudGcePlugin extends Plugin {
         if (isDiscoveryAlive(settings, logger)) {
             services.add(GceModule.getComputeServiceImpl());
         }
-        
+
         services.add(GCSModule.getStorageServiceImpl());
-        
+
         return services;
     }
 
@@ -121,10 +121,10 @@ public class CloudGcePlugin extends Plugin {
         }
     }
 
-    public void onModule(RepositoriesModule repositoriesModule) {        
-        repositoriesModule.registerRepository(GCSRepository.TYPE, GCSRepository.class, BlobStoreIndexShardRepository.class);        
+    public void onModule(RepositoriesModule repositoriesModule) {
+        repositoriesModule.registerRepository(GCSRepository.TYPE, GCSRepository.class, BlobStoreIndexShardRepository.class);
     }
-    
+
     /**
      * Check if discovery is meant to start
      *
@@ -138,11 +138,11 @@ public class CloudGcePlugin extends Plugin {
         }
 
         if (!checkProperty(GceComputeService.Fields.PROJECT, settings.get(GceComputeService.Fields.PROJECT), logger) ||
-                !checkProperty(GceComputeService.Fields.ZONE, settings.getAsArray(GceComputeService.Fields.ZONE), logger)) {
+            !checkProperty(GceComputeService.Fields.ZONE, settings.getAsArray(GceComputeService.Fields.ZONE), logger)) {
             logger.debug("one or more gce discovery settings are missing. " +
-                            "Check elasticsearch.yml file. Should have [{}] and [{}].",
-                    GceComputeService.Fields.PROJECT,
-                    GceComputeService.Fields.ZONE);
+                    "Check elasticsearch.yml file. Should have [{}] and [{}].",
+                GceComputeService.Fields.PROJECT,
+                GceComputeService.Fields.ZONE);
             return false;
         }
 

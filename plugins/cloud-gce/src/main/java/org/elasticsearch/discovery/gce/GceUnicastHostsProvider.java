@@ -70,9 +70,9 @@ public class GceUnicastHostsProvider extends AbstractComponent implements Unicas
 
     @Inject
     public GceUnicastHostsProvider(Settings settings, GceComputeService gceComputeService,
-            TransportService transportService,
-            NetworkService networkService,
-            Version version) {
+                                   TransportService transportService,
+                                   NetworkService networkService,
+                                   Version version) {
         super(settings);
         this.gceComputeService = gceComputeService;
         this.transportService = transportService;
@@ -99,7 +99,7 @@ public class GceUnicastHostsProvider extends AbstractComponent implements Unicas
     public List<DiscoveryNode> buildDynamicNodes() {
         if (refreshInterval.millis() != 0) {
             if (cachedDiscoNodes != null &&
-                    (refreshInterval.millis() < 0 || (System.currentTimeMillis() - lastRefresh) < refreshInterval.millis())) {
+                (refreshInterval.millis() < 0 || (System.currentTimeMillis() - lastRefresh) < refreshInterval.millis())) {
                 if (logger.isTraceEnabled()) logger.trace("using cache to retrieve node list");
                 return cachedDiscoNodes;
             }
@@ -146,7 +146,7 @@ public class GceUnicastHostsProvider extends AbstractComponent implements Unicas
                 if (tags.length > 0) {
                     logger.trace("start filtering instance {} with tags {}.", name, tags);
                     if (instance.getTags() == null || instance.getTags().isEmpty()
-                            || instance.getTags().getItems() == null || instance.getTags().getItems().isEmpty()) {
+                        || instance.getTags().getItems() == null || instance.getTags().getItems().isEmpty()) {
                         // If this instance have no tag, we filter it
                         logger.trace("no tags for this instance but we asked for tags. {} won't be part of the cluster.", name);
                         filterByTag = true;
@@ -170,7 +170,7 @@ public class GceUnicastHostsProvider extends AbstractComponent implements Unicas
                 }
                 if (filterByTag) {
                     logger.trace("filtering out instance {} based tags {}, not part of {}", name, tags,
-                            instance.getTags() == null || instance.getTags().getItems() == null ? "" : instance.getTags());
+                        instance.getTags() == null || instance.getTags().getItems() == null ? "" : instance.getTags());
                     continue;
                 } else {
                     logger.trace("instance {} with tags {} is added to discovery", name, tags);
@@ -228,7 +228,7 @@ public class GceUnicastHostsProvider extends AbstractComponent implements Unicas
 
                         for (TransportAddress transportAddress : addresses) {
                             logger.trace("adding {}, type {}, address {}, transport_address {}, status {}", name, type,
-                                    ip_private, transportAddress, status);
+                                ip_private, transportAddress, status);
                             cachedDiscoNodes.add(new DiscoveryNode("#cloud-" + name + "-" + 0, transportAddress, version.minimumCompatibilityVersion()));
                         }
                     }
