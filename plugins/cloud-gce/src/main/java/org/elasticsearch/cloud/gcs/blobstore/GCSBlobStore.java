@@ -19,6 +19,23 @@
 
 package org.elasticsearch.cloud.gcs.blobstore;
 
+import com.google.api.gax.paging.Page;
+import com.google.cloud.ReadChannel;
+import com.google.cloud.WriteChannel;
+import com.google.cloud.storage.*;
+import com.google.cloud.storage.Storage.BlobListOption;
+import com.google.cloud.storage.Storage.CopyRequest;
+import org.elasticsearch.common.SuppressForbidden;
+import org.elasticsearch.common.blobstore.*;
+import org.elasticsearch.common.blobstore.support.PlainBlobMetaData;
+import org.elasticsearch.common.bytes.BytesReference;
+import org.elasticsearch.common.collect.MapBuilder;
+import org.elasticsearch.common.component.AbstractComponent;
+import org.elasticsearch.common.io.Streams;
+import org.elasticsearch.common.io.stream.StreamInput;
+import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.repositories.gcs.RepoUtil;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -28,35 +45,8 @@ import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
 import java.nio.file.NoSuchFileException;
 import java.security.PrivilegedExceptionAction;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
-
-import org.elasticsearch.common.blobstore.BlobContainer;
-import org.elasticsearch.common.blobstore.BlobPath;
-import org.elasticsearch.common.blobstore.BlobStore;
-import org.elasticsearch.common.blobstore.BlobMetaData;
-import org.elasticsearch.common.blobstore.BlobStoreException;
-import org.elasticsearch.common.blobstore.support.PlainBlobMetaData;
-import org.elasticsearch.common.bytes.BytesReference;
-import org.elasticsearch.common.collect.MapBuilder;
-import org.elasticsearch.common.component.AbstractComponent;
-import org.elasticsearch.common.io.stream.StreamInput;
-import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.repositories.gcs.RepoUtil;
-import org.elasticsearch.common.SuppressForbidden;
-import org.elasticsearch.common.io.Streams;
-
-import com.google.cloud.ReadChannel;
-import com.google.cloud.WriteChannel;
-import com.google.cloud.storage.Blob;
-import com.google.cloud.storage.BlobId;
-import com.google.cloud.storage.BlobInfo;
-import com.google.cloud.storage.Storage;
-import com.google.cloud.storage.Storage.BlobListOption;
-import com.google.cloud.storage.Storage.CopyRequest;
-import com.google.cloud.storage.StorageException;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class GCSBlobStore extends AbstractComponent implements BlobStore {
 
@@ -145,21 +135,49 @@ public class GCSBlobStore extends AbstractComponent implements BlobStore {
         logger.debug("Path prefix: {}", pathPrefix);
         final MapBuilder<String, BlobMetaData> mapBuilder = MapBuilder.newMapBuilder();
 
-        return RepoUtil.doPrivileged(new PrivilegedExceptionAction<Map<String, BlobMetaData>>() {
-            @Override
-            public Map<String, BlobMetaData> run() throws Exception {
-                Iterable<Blob> iterable = storage.get(bucket).list(BlobListOption.prefix(pathPrefix)).iterateAll();
-                for (Blob blob : iterable) {
-                    logger.debug("Blob: {}", blob.toString());
-                    assert blob.getName().startsWith(path);
-                    final String suffixName = blob.getName().substring(path.length());
-                    logger.debug("Suffix: {}", suffixName);
-                    mapBuilder.put(suffixName, new PlainBlobMetaData(suffixName, blob.getSize()));
-                }
+        final AtomicLong counter = new AtomicLong();
 
-                return mapBuilder.immutableMap();
-            }
-        });
+        try {
+            return RepoUtil.doPrivileged(new PrivilegedExceptionAction<Map<String, BlobMetaData>>() {
+                @Override
+                public Map<String, BlobMetaData> run() throws Exception {
+                    Page<Blob> page = storage.get(bucket).list(BlobListOption.prefix(pathPrefix));
+
+                    String nextPageToken = page.getNextPageToken();
+                    Iterator<Blob> currentPageIterator = page.getValues().iterator();
+                    counter.addAndGet(processIterator(currentPageIterator, path, mapBuilder));
+
+                    while (nextPageToken != null) {
+                        page = storage.get(bucket)
+                            .list(Storage.BlobListOption.prefix(pathPrefix),
+                                Storage.BlobListOption.pageToken(nextPageToken));
+                        currentPageIterator = page.getValues().iterator();
+                        nextPageToken = page.getNextPageToken();
+                        counter.addAndGet(processIterator(currentPageIterator, path, mapBuilder));
+                    }
+
+                    return mapBuilder.immutableMap();
+                }
+            });
+        } catch (Exception e) {
+            logger.info("Failed after {}", counter.get());
+            logger.error("Error on prefix {}: {}", e, pathPrefix, e);
+            throw e;
+        }
+    }
+
+    private long processIterator(Iterator<Blob> iterator, String path, MapBuilder<String, BlobMetaData> mapBuilder) {
+        long counter = 0;
+        while (iterator.hasNext()) {
+            Blob blob = iterator.next();
+            logger.debug("Blob: {}", blob.toString());
+            assert blob.getName().startsWith(path);
+            final String suffixName = blob.getName().substring(path.length());
+            logger.debug("Suffix: {}", suffixName);
+            mapBuilder.put(suffixName, new PlainBlobMetaData(suffixName, blob.getSize()));
+            counter++;
+        }
+        return counter;
     }
 
     private Blob getBlob(final BlobId blobId) throws IOException {
